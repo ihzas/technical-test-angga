@@ -30,7 +30,7 @@ module.exports = {
     },
     getAllTransaksi: async (req, res) => {
         try {
-            const { search, sortBy } = req.query;
+            const { search, sortBy, sortName } = req.query;
 
             const searchCondition = search
                 ? {
@@ -44,9 +44,15 @@ module.exports = {
                 }
                 : {};
 
-            const orderCondition = sortBy
-                ? [['Tanggal_Transaksi', sortBy === 'asc' ? 'ASC' : 'DESC']]
-                : [];
+            const orderCondition = [];
+
+            if (sortBy) {
+                orderCondition.push(['Tanggal_Transaksi', sortBy === 'asc' ? 'ASC' : 'DESC']);
+            }
+
+            if (sortName) {
+                orderCondition.push([Sequelize.literal('`Barang.Nama_Barang` ' + sortName)]);
+            }
 
             const transaksiList = await Transaksi.findAll({
                 include: [{ model: Barang, as: 'Barang' }],
@@ -61,14 +67,35 @@ module.exports = {
             res.status(500).json("Failed to fetch transaksi")
         }
     },
+
     getMostSold: async (req, res) => {
         try {
+            const { category, startDate, endDate } = req.query;
+
+            const dateCondition = startDate && endDate ? {
+                Tanggal_Transaksi: {
+                    [Op.between]: [startDate, endDate],
+                },
+            } : {};
+
+            const categoryCondition = category ? {
+                '$Barang.Jenis_Barang$': category,
+            } : {};
+
             const mostSold = await Transaksi.findAll({
                 attributes: [
                     [Sequelize.fn('SUM', Sequelize.col('Jumlah_Terjual')), 'totalTerjual'],
+                    [Sequelize.col('Barang.id'), 'BarangId'],
+                    [Sequelize.col('Barang.Nama_Barang'), 'Nama_Barang'],
+                    [Sequelize.col('Barang.Jenis_Barang'), 'Jenis_Barang'],
+                    [Sequelize.col('Tanggal_Transaksi'), 'Tanggal_Transaksi'],
                 ],
-                include: [{ model: Barang, as: 'Barang' }],
-                group: ['Barang.Jenis_Barang'],
+                include: [{ model: Barang }],
+                group: ['Barang.id', 'Barang.Nama_Barang', 'Barang.Jenis_Barang', 'Tanggal_Transaksi'],
+                where: {
+                    ...dateCondition,
+                    ...categoryCondition,
+                },
                 order: [[Sequelize.literal('totalTerjual'), 'DESC']],
             });
 
@@ -78,37 +105,35 @@ module.exports = {
             res.status(500).json({ error: 'Failed to fetch data' });
         }
     },
-    leastSold: async (req, res) => {
+
+    getLeastSold: async (req, res) => {
         try {
-            const leastSold = await Transaksi.findAll({
+            const { category, startDate, endDate } = req.query;
+
+            const dateCondition = startDate && endDate ? {
+                Tanggal_Transaksi: {
+                    [Op.between]: [startDate, endDate],
+                },
+            } : {};
+
+            const mostSold = await Transaksi.findAll({
                 attributes: [
                     [Sequelize.fn('SUM', Sequelize.col('Jumlah_Terjual')), 'totalTerjual'],
+                    [Sequelize.col('Barang.id'), 'BarangId'],
+                    [Sequelize.col('Barang.Nama_Barang'), 'Nama_Barang'],
+                    [Sequelize.col('Barang.Jenis_Barang'), 'Jenis_Barang'],
+                    [Sequelize.col('Tanggal_Transaksi'), 'Tanggal_Transaksi'],
                 ],
-                include: [{ model: Barang, as: 'Barang' }],
-                group: ['Barang.Jenis_Barang'],
+                include: [{ model: Barang }],
+                group: ['Barang.id', 'Barang.Nama_Barang', 'Barang.Jenis_Barang', 'Tanggal_Transaksi'],
+                where: {
+                    ...dateCondition,
+                    '$Barang.Jenis_Barang$': category,
+                },
                 order: [[Sequelize.literal('totalTerjual'), 'ASC']],
             });
 
-            res.status(200).json(leastSold);
-        } catch (error) {
-            console.error(error);
-            res.status(500).json({ error: 'Failed to fetch data' });
-        }
-    },
-    filterByDate: async (req, res) => {
-        try {
-            const { startDate, endDate } = req.query;
-
-            const transactions = await Transaksi.findAll({
-                where: {
-                    Tanggal_Transaksi: {
-                        [Sequelize.Op.between]: [startDate, endDate],
-                    },
-                },
-                include: [{ model: Barang, as: 'Barang' }],
-            });
-
-            res.status(200).json(transactions);
+            res.status(200).json(mostSold);
         } catch (error) {
             console.error(error);
             res.status(500).json({ error: 'Failed to fetch data' });
@@ -165,16 +190,16 @@ module.exports = {
                 where: { id },
             });
 
-            if (deletedTransaksi === 1) {
+            // if (deletedTransaksi === 1) {
 
-                await Barang.destroy({
-                    where: { id: existingTransaksi.ID_Barang },
-                });
+            //     await Barang.destroy({
+            //         where: { id: existingTransaksi.ID_Barang },
+            //     });
 
-                res.status(200).json("Transaksi deleted successfully");
-            } else {
-                res.status(404).json("Transaksi not found");
-            }
+            res.status(200).json("Transaksi deleted successfully");
+            // } else {
+            //     res.status(404).json("Transaksi not found");
+            // }
         } catch (error) {
             console.log(error);
             res.status(500).json("Failed to delete transaksi")

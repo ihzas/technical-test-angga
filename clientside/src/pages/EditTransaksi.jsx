@@ -3,7 +3,14 @@ import axiosClient from "../axiosClient";
 import {PulseLoader} from "react-spinners";
 import {css} from "@emotion/react";
 
-export const EditTransaksi = ({onClose, id, fetchTransaksi}) => {
+export const EditTransaksi = ({
+  onClose,
+  id,
+  fetchTransaksi,
+  search,
+  sortBy,
+  byName,
+}) => {
   const [isLoading, setIsLoading] = useState(false);
   const [namaBarang, setNamaBarang] = useState("");
   const [stok, setStok] = useState(0);
@@ -34,8 +41,8 @@ export const EditTransaksi = ({onClose, id, fetchTransaksi}) => {
         Jenis_Barang: jenisBarang,
       });
       setIsLoading(false);
-      fetchTransaksi();
       onClose();
+      fetchTransaksi(search, sortBy, byName);
     } catch (error) {
       setIsLoading(false);
       console.log(error);

@@ -3,6 +3,8 @@ import axiosClient from "../axiosClient";
 import {EditTransaksi} from "./EditTransaksi";
 import dayjs from "dayjs";
 import {Link} from "react-router-dom";
+import {MainTableTransaksi} from "../components/MainTableTransaksi";
+import Swal from "sweetalert2";
 
 export const Transaction = () => {
   const [transaksis, setTransaksis] = useState([]);
@@ -10,20 +12,22 @@ export const Transaction = () => {
   const [selectedId, setSelectedId] = useState(null);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("");
+  const [byName, setByName] = useState("");
 
-  const [mostSold, setMostSold] = useState([]);
-  const [leastSold, setLeastSold] = useState([]);
+  const [mostSoldData, setMostSoldData] = useState([]);
+  const [leastSoldData, setLeastSoldData] = useState([]);
+
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [filteredTransactions, setFilteredTransactions] = useState([]);
 
-  console.log({mostSold, leastSold});
+  const [sortByCategory, setSortByCategory] = useState("");
 
-  const fetchTransaksi = async (searchParam, sortByParam) => {
+  const fetchTransaksi = async (searchParam, sortByParam, sortByName) => {
     try {
       const params = new URLSearchParams({
         search: searchParam,
         sortBy: sortByParam,
+        sortName: sortByName,
       });
 
       const response = await axiosClient.get(`transaksi?${params.toString()}`);
@@ -35,8 +39,15 @@ export const Transaction = () => {
 
   const fetchMostSold = async () => {
     try {
-      const response = await axiosClient.get("/transaksi/most-sold");
-      setMostSold(response.data);
+      setMostSoldData([]);
+      const response = await axiosClient.get(`/transaksi/most-sold`, {
+        params: {
+          startDate,
+          endDate,
+          category: sortByCategory,
+        },
+      });
+      setMostSoldData(response.data);
     } catch (error) {
       console.log(error);
     }
@@ -44,37 +55,53 @@ export const Transaction = () => {
 
   const fetchLeastSold = async () => {
     try {
-      const response = await axiosClient.get("/transaksi/least-sold");
-      setLeastSold(response.data);
-    } catch (error) {
-      console.log(error);
-    }
-  };
-
-  const filterByDate = async () => {
-    try {
-      const response = await axiosClient.get(
-        `/transaksi/filter-by-date?startDate=${startDate}&endDate=${endDate}`
-      );
-      setFilteredTransactions(response.data);
+      setLeastSoldData([]);
+      const response = await axiosClient.get(`/transaksi/least-sold`, {
+        params: {
+          startDate,
+          endDate,
+          category: sortByCategory,
+        },
+      });
+      setLeastSoldData(response.data);
     } catch (error) {
       console.log(error);
     }
   };
 
   useEffect(() => {
-    fetchTransaksi(search, sortBy);
-    fetchMostSold();
-    fetchLeastSold();
-  }, [search, sortBy]);
+    fetchTransaksi(search, sortBy, byName);
+  }, [search, sortBy, byName]);
 
   const deleteTransaksi = async (id) => {
-    try {
-      await axiosClient.delete(`transaksi/${id}`);
-      fetchTransaksi();
-    } catch (error) {
-      console.log(error);
-    }
+    Swal.fire({
+      title: "Are you sure?",
+      text: "You won't be able to revert this!",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#3085d6",
+      cancelButtonColor: "#d33",
+      confirmButtonText: "Yes, delete it!",
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        try {
+          await axiosClient.delete(`transaksi/${id}`);
+          fetchTransaksi(search, sortBy, byName);
+          Swal.fire(
+            "Deleted!",
+            "Your transaction has been deleted.",
+            "success"
+          );
+        } catch (error) {
+          console.log(error);
+          Swal.fire(
+            "Error",
+            "An error occurred while deleting the transaction.",
+            "error"
+          );
+        }
+      }
+    });
   };
 
   const closeModal = () => {
@@ -90,9 +117,34 @@ export const Transaction = () => {
     fetchTransaksi(search, sortBy);
   };
 
-  const clearSearch = () => {
-    setSearch("");
-    fetchTransaksi("", sortBy);
+  const handleStartDateChange = (e) => {
+    setStartDate(e.target.value);
+  };
+
+  const handleEndDateChange = (e) => {
+    setEndDate(e.target.value);
+  };
+
+  const handleFilter = () => {
+    if (!startDate || !endDate) {
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "Please select both Start Date and End Date.",
+      });
+      return;
+    }
+    if (!sortByCategory) {
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "Please select category.",
+      });
+      return;
+    }
+
+    fetchMostSold();
+    fetchLeastSold();
   };
 
   return (
@@ -116,6 +168,7 @@ export const Transaction = () => {
       </div>
 
       <div className="flex items-center mt-7">
+        {/* Search */}
         <div className="flex-auto">
           <div className="relative rounded-md ">
             <input
@@ -144,193 +197,217 @@ export const Transaction = () => {
             </div>
           </div>
         </div>
+
+        {/* SortBy */}
         <div className="ml-4">
           <select
             className="block w-full px-3 py-2 border border-gray-300 rounded-md  focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}>
-            <option value="">Sort By</option>
-            <option value="asc">Ascending</option>
-            <option value="desc">Descending</option>
+            <option value="">Sort By Date</option>
+            <option value="asc">Date Oldest</option>
+            <option value="desc">Date Newest</option>
+          </select>
+        </div>
+        <div className="ml-4">
+          <select
+            className="block w-full px-3 py-2 border border-gray-300 rounded-md  focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+            value={byName}
+            placeholder="Sort By Name"
+            onChange={(e) => setByName(e.target.value)}>
+            <option value="">Sort By Name</option>
+            <option value="asc">A - Z</option>
+            <option value="desc">Z - A</option>
           </select>
         </div>
       </div>
 
       <div className="mt-4 flex flex-col">
         <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
-          <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-              <table className="min-w-full divide-y divide-gray-300">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th
-                      scope="col"
-                      className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">
-                      <a href="#" className="group inline-flex">
+          <MainTableTransaksi
+            transaksis={transaksis}
+            formatDate={formatDate}
+            setSelectedId={setSelectedId}
+            setIsModalOpen={setIsModalOpen}
+            deleteTransaksi={deleteTransaksi}
+            isOpenModal={isOpenModal}
+            EditTransaksi={EditTransaksi}
+            selectedId={selectedId}
+            fetchTransaksi={fetchTransaksi}
+            closeModal={closeModal}
+            search={search}
+            sortBy={sortBy}
+            byName={byName}
+          />
+        </div>
+
+        <div className="mt-8 mb-28">
+          <div className="mt-4 flex flex-col justify-center mb-8 sm:flex-row">
+            <div className="ml-4">
+              <input
+                type="date"
+                placeholder="Start Date"
+                className="block w-full px-3 py-2 border border-gray-300 rounded-md  focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                value={startDate}
+                onChange={handleStartDateChange}
+              />
+            </div>
+
+            <div className="ml-4">
+              <input
+                type="date"
+                placeholder="End Date"
+                className="block w-full px-3 py-2 border border-gray-300 rounded-md  focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                value={endDate}
+                onChange={handleEndDateChange}
+              />
+            </div>
+
+            <div className="ml-4">
+              <select
+                className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                value={sortByCategory}
+                onChange={(e) => setSortByCategory(e.target.value)}>
+                <option value="">Sort By Category</option>
+                <option value="Pembersih">Pembersih</option>
+                <option value="Konsumsi">Konsumsi</option>
+              </select>
+            </div>
+
+            <button
+              onClick={handleFilter}
+              className="ml-4 inline-flex items-center justify-center rounded-md border border-transparent bg-gray-800 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+              Filter
+            </button>
+          </div>
+
+          <div className="flex flex-wrap">
+            {/* Terjual Terbanyak */}
+            <div className="w-full sm:w-1/2 pr-4 mb-4 sm:mb-0">
+              <h2 className="text-xl font-semibold text-gray-900">
+                Data Transaksi Terjual Dari Terbanyak
+              </h2>
+              <div className="shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                <table className="min-w-full divide-y divide-gray-300 mt-4">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th
+                        scope="col"
+                        className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
                         No
-                      </a>
-                    </th>
-                    <th
-                      scope="col"
-                      className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">
-                      <a href="#" className="group inline-flex">
-                        Nama Barang
-                      </a>
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      <a href="#" className="group inline-flex">
-                        Stok
-                      </a>
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      <a href="#" className="group inline-flex">
-                        Jumlah Terjual
-                      </a>
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      <a href="#" className="group inline-flex">
-                        Tanggal Transaksi
-                      </a>
-                    </th>
-                    <th
-                      scope="col"
-                      className=" py-3.5 text-left text-sm font-semibold text-gray-900">
-                      <a href="#" className="group inline-flex">
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
                         Jenis Barang
-                      </a>
-                    </th>
-                    <th
-                      scope="col"
-                      className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                      <span className="sr-only">Edit</span>
-                    </th>
-                    <th
-                      scope="col"
-                      className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                      <span className="sr-only">Delete</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
-                  {transaksis.map((transaksi) => (
-                    <tr key={transaksi.id}>
-                      <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
-                        {transaksi.id}
-                      </td>
-                      <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
-                        {transaksi.Barang.Nama_Barang}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        {transaksi.Stok}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        {transaksi.Jumlah_Terjual}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        {formatDate(transaksi.Tanggal_Transaksi)}
-                      </td>
-                      <td className="whitespace-nowrap  py-4 text-sm text-gray-500">
-                        {transaksi.Barang.Jenis_Barang}
-                      </td>
-                      <td className="relative whitespace-nowrap py-4 text-right text-sm font-medium sm:pr-6">
-                        <button
-                          onClick={() => {
-                            setSelectedId(transaksi.id);
-                            setIsModalOpen(true);
-                          }}
-                          href="#"
-                          className="text-indigo-600 mx-4 hover:text-indigo-900">
-                          Edit
-                        </button>
-                        <a
-                          onClick={() => deleteTransaksi(transaksi.id)}
-                          href="#"
-                          className="text-indigo-600 hover:text-indigo-900">
-                          Delete
-                        </a>
-                      </td>
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                        Total Terjual
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                        Tanggal Transaksi
+                      </th>
                     </tr>
-                  ))}
-                  {isOpenModal && (
-                    <EditTransaksi
-                      id={selectedId}
-                      onClose={closeModal}
-                      fetchTransaksi={fetchTransaksi}
-                    />
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {mostSoldData.length > 0 ? (
+                      mostSoldData.map((item) => (
+                        <tr key={item.Barang.Jenis_Barang}>
+                          <td className="px-4 py-2 whitespace-nowrap">
+                            {item.Barang.id}
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap">
+                            {item.Barang.Jenis_Barang}
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap">
+                            {item.totalTerjual}
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap">
+                            {formatDate(item.Tanggal_Transaksi)}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan="4"
+                          className="px-4 py-2 text-center text-xs font-medium text-gray-600">
+                          No data available.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Terjual Terendah */}
+            <div className="w-full sm:w-1/2">
+              <h2 className="text-xl font-semibold text-gray-900">
+                Data Transaksi Terjual Dari Terendah
+              </h2>
+              <div className="shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                <table className="min-w-full divide-y divide-gray-300 mt-4">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th
+                        scope="col"
+                        className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                        No
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                        Jenis Barang
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                        Total Terjual
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                        Tanggal Transaksi
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {leastSoldData.length > 0 ? (
+                      leastSoldData.map((item) => (
+                        <tr key={item.Barang.Jenis_Barang}>
+                          <td className="px-4 py-2 whitespace-nowrap">
+                            {item.Barang.id}
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap">
+                            {item.Barang.Jenis_Barang}
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap">
+                            {item.totalTerjual}
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap">
+                            {formatDate(item.Tanggal_Transaksi)}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan="4"
+                          className="px-4 py-2 text-center text-xs font-medium text-gray-600">
+                          No data available.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="flex mt-7">
-        <div className="w-1/2 pr-4">
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">
-            Transaksi Terbanyak Terjual
-          </h2>
-          <table className="min-w-full divide-y divide-gray-300">
-            {/* Tabel untuk data transaksi terbanyak terjual */}
-            <thead>
-              <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                  Jenis Barang
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                  Total Terjual
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {mostSold.map((item) => (
-                <tr key={item.Barang.Jenis_Barang}>
-                  <td className="px-4 py-2 whitespace-nowrap">
-                    {item.Barang.Jenis_Barang}
-                  </td>
-                  <td className="px-4 py-2 whitespace-nowrap">
-                    {item.totalTerjual}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="w-1/2 pl-4">
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">
-            Transaksi Terendah Terjual
-          </h2>
-          <table className="min-w-full divide-y divide-gray-300">
-            {/* Tabel untuk data transaksi terendah terjual */}
-            <thead>
-              <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                  Jenis Barang
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                  Total Terjual
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {leastSold.map((item) => (
-                <tr key={item.Barang.Jenis_Barang}>
-                  <td className="px-4 py-2 whitespace-nowrap">
-                    {item.Barang.Jenis_Barang}
-                  </td>
-                  <td className="px-4 py-2 whitespace-nowrap">
-                    {item.totalTerjual}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>

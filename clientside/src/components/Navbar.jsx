@@ -16,9 +16,8 @@ export default function Navbar() {
               <div className="flex items-center">
                 <div className="hidden sm:ml-6 sm:block">
                   <div className="flex space-x-4">
-                    {/* Current: "bg-gray-900 text-white", Default: "text-gray-300 hover:bg-gray-700 hover:text-white" */}
                     <a
-                      href="#"
+                      href="/"
                       className="rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white">
                       Dashboard
                     </a>
